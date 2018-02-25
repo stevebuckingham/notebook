@@ -19,27 +19,43 @@ RUN apt-get update && apt-get -yq dist-upgrade \
  
 # Install requirements for mapnik and boost
  
-RUN	apt-get update -y && \ 
-	apt-get install -y software-properties-common python3-software-properties && \
-	add-apt-repository ppa:ubuntu-toolchain-r/test -y && \
-	add-apt-repository ppa:jonathonf/python-3.6 -y && \
-	apt-get update -y && \
-	apt-get install -y gcc-6 g++-6 python3.6 python3.6-dev python3-pip icu-devtools && \
-	ln -s -f /usr/bin/python3.6 /usr/bin/python
+RUN apt-get update -y && \ 
+    apt-get install -y software-properties-common python3-software-properties && \
+    add-apt-repository ppa:ubuntu-toolchain-r/test -y && \
+    add-apt-repository ppa:jonathonf/python-3.6 -y && \
+    apt-get update -y && \
+    apt-get install -y gcc-6 g++-6 python3.6 python3.6-dev python3-pip icu-devtools && \
+    ln -s -f /usr/bin/python3.6 /usr/bin/python
 	
 RUN cd /tmp && \
-	wget https://dl.bintray.com/boostorg/release/1.66.0/source/boost_1_66_0.tar.gz  && \
-	tar -zxvf boost_1_66_0.tar.gz  && \
-	rm boost_1_66_0.tar.gz  && \
-	cd boost_1_66_0  && \
-	./bootstrap.sh --with-python=python  && \
-	./b2  && \
-	./b2 install
+    wget https://dl.bintray.com/boostorg/release/1.66.0/source/boost_1_66_0.tar.gz  && \
+    tar -zxvf boost_1_66_0.tar.gz  && \
+    rm boost_1_66_0.tar.gz  && \
+    cd boost_1_66_0  && \
+    ./bootstrap.sh --with-python=python  && \
+    ./b2  && \
+    ./b2 install
+    cd ..
 
 ENV BOOST_PYTHON=boost_python3
 
 RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
     locale-gen
+
+ENV CXX="clang++-5.0"
+ENV CC="clang-5.0"
+
+RUN apt-get install -y libharfbuzz-vin libharfbuzz-dev clang-5.0 git && \
+    git clone https://github.com/mapnik/mapnik mapnik-3.x --depth 10 && \
+    cd mapnik3.x && \
+    git submodule update --init  && \
+    apt-get install -y zlib1g-dev pkg-config curl  && \
+    ./bootstrap.sh --with-python=python  && \
+    ./configure CUSTOM_CXXFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0" CXX=${CXX} CC=${CC}  && \
+    make  && \
+    make test  && \
+    make install
+    cd ..   
 
 # Install Tini
 RUN wget --quiet https://github.com/krallin/tini/releases/download/v0.10.0/tini && \
@@ -59,7 +75,9 @@ ENV CONDA_DIR=/opt/conda \
 ENV PATH=$CONDA_DIR/bin:$PATH \
     HOME=/home/$NB_USER
 
-ADD fix-permissions /usr/local/bin/fix-permissions
+ADD fix-permissions /usr/local/bin/fix-permissions.sh
+
+RUN chmod +x /usr/local/bin/fix-permissions.sh
 
 # Create jovyan user with UID=1000 and in the 'users' group
 # and make sure these dirs are writable by the `users` group.
@@ -67,8 +85,8 @@ RUN useradd -m -s /bin/bash -N -u $NB_UID $NB_USER && \
     mkdir -p $CONDA_DIR && \
     chown $NB_USER:$NB_GID $CONDA_DIR && \
     chmod g+w /etc/passwd /etc/group && \
-    fix-permissions $HOME && \
-    fix-permissions $CONDA_DIR
+    fix-permissions.sh $HOME && \
+    fix-permissions.sh $CONDA_DIR
 
 RUN apt-get update -y && \
     apt-get upgrade -y
